@@ -7,4 +7,5 @@ ConfigModel {
         icon: "preferences-system-login"
         source: "configGeneral.qml"
     }
+
 }
