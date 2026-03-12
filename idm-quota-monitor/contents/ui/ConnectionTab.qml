@@ -157,140 +157,190 @@ Item {
             opacity: 0.5
         }
 
-        // ── History chart ─────────────────────────────────────────────────
-        PC3.Label {
-            text: "24h usage history"
-            font.pixelSize: 10
-            opacity: 0.5
+        // ── Network animation ──────────────────────────────────────────────
+        FontLoader {
+            id: orbitronFont
+            source: Qt.resolvedUrl("../fonts/Orbitron_Bold.ttf")
         }
 
         Canvas {
-            id: chart
+            id: netAnim
             Layout.fillWidth:  true
             Layout.fillHeight: true
-            Layout.minimumHeight: 70
+            Layout.minimumHeight: 100
 
-            onWidthChanged:  requestPaint()
-            onHeightChanged: requestPaint()
+            property real tick: 0
+            readonly property color nc: "#a855f7"   // purple
 
-            property var pts: history
+            Timer {
+                interval: 32
+                running:  true
+                repeat:   true
+                onTriggered: { netAnim.tick += 0.016; netAnim.requestPaint() }
+            }
 
-            onPtsChanged: requestPaint()
-            Component.onCompleted: requestPaint()
+            // HSL (h:0-360, s:0-1, l:0-1) → Qt.rgba
+            function hsl(h, s, l, a) {
+                h = ((h % 360) + 360) % 360 / 360
+                var q = l < 0.5 ? l * (1 + s) : l + s - l * s
+                var p = 2 * l - q
+                function hue2rgb(t) {
+                    if (t < 0) t += 1; if (t > 1) t -= 1
+                    if (t < 1/6) return p + (q - p) * 6 * t
+                    if (t < 1/2) return q
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
+                    return p
+                }
+                return Qt.rgba(hue2rgb(h + 1/3), hue2rgb(h), hue2rgb(h - 1/3), a)
+            }
+
+            // Draw one server rack centered at (cx, cy)
+            function drawRack(ctx, cx, cy, phase) {
+                var sw = 26, sh = Math.min(height * 0.72, 64)
+                var sx = cx - sw / 2
+                var sy = cy - sh / 2
+                var units = 4
+                var pulse = 0.5 + 0.5 * Math.sin(tick * 2.0 + phase)
+
+                // Body fill
+                ctx.fillStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.10)
+                ctx.fillRect(sx, sy, sw, sh)
+
+                // Body border
+                ctx.lineWidth   = 1.5
+                ctx.strokeStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.45 + pulse * 0.25)
+                ctx.strokeRect(sx, sy, sw, sh)
+
+                // Unit divider lines
+                for (var u = 1; u < units; u++) {
+                    var uy = sy + (sh / units) * u
+                    ctx.beginPath()
+                    ctx.moveTo(sx + 2, uy)
+                    ctx.lineTo(sx + sw - 2, uy)
+                    ctx.lineWidth   = 0.5
+                    ctx.strokeStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.22)
+                    ctx.stroke()
+                }
+
+                // LEDs — one per unit, staggered pulse
+                for (var l = 0; l < units; l++) {
+                    var ledX  = sx + sw - 6
+                    var ledY  = sy + (sh / units) * l + (sh / units) / 2
+                    var lp    = 0.5 + 0.5 * Math.sin(tick * 3.5 + l * 1.4 + phase)
+
+                    // LED glow
+                    var g = ctx.createRadialGradient(ledX, ledY, 0, ledX, ledY, 6)
+                    g.addColorStop(0, Qt.rgba(0.18, 1.0, 0.42, 0.55 * lp))
+                    g.addColorStop(1, Qt.rgba(0.18, 1.0, 0.42, 0))
+                    ctx.beginPath()
+                    ctx.arc(ledX, ledY, 6, 0, Math.PI * 2)
+                    ctx.fillStyle = g
+                    ctx.fill()
+
+                    // LED dot
+                    ctx.beginPath()
+                    ctx.arc(ledX, ledY, 2, 0, Math.PI * 2)
+                    ctx.fillStyle = Qt.rgba(0.18, 1.0, 0.42, 0.4 + lp * 0.6)
+                    ctx.fill()
+                }
+            }
 
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
 
-                var data = pts
-                if (!data || data.length < 2) {
-                    ctx.fillStyle = Qt.rgba(Kirigami.Theme.textColor.r,
-                                            Kirigami.Theme.textColor.g,
-                                            Kirigami.Theme.textColor.b, 0.25)
-                    ctx.font         = "11px sans-serif"
-                    ctx.textAlign    = "center"
-                    ctx.textBaseline = "middle"
-                    ctx.fillText("No history yet", width / 2, height / 2)
-                    return
-                }
+                var w = width, h = height
+                var cx = w / 2, cy = h / 2
 
-                var pad   = { top: 6, right: 6, bottom: 18, left: 32 }
-                var cw    = width  - pad.left - pad.right
-                var ch    = height - pad.top  - pad.bottom
+                // Server x positions
+                var lx = 22, rx = w - 22
 
-                // Y axis: 0–100 % with a bit of padding
-                var minV = 0, maxV = 100
+                // ── Draw racks ────────────────────────────────────────────
+                drawRack(ctx, lx, cy, 0.0)
+                drawRack(ctx, rx, cy, 1.8)
 
-                // ── Grid lines ────────────────────────────────────────────
-                ctx.lineWidth   = 0.5
-                ctx.strokeStyle = Qt.rgba(Kirigami.Theme.textColor.r,
-                                         Kirigami.Theme.textColor.g,
-                                         Kirigami.Theme.textColor.b, 0.1)
-                ctx.fillStyle   = Qt.rgba(Kirigami.Theme.textColor.r,
-                                         Kirigami.Theme.textColor.g,
-                                         Kirigami.Theme.textColor.b, 0.35)
-                ctx.font        = "9px sans-serif"
-                ctx.textAlign   = "right"
-                ctx.textBaseline = "middle"
+                // ── Network nodes between servers ─────────────────────────
+                var nds = [
+                    { x: cx * 0.62, y: cy * 0.45 },
+                    { x: cx,        y: cy * 1.55  },
+                    { x: cx * 1.38, y: cy * 0.45  }
+                ]
 
-                var gridLines = [0, 25, 50, 75, 100]
-                for (var g = 0; g < gridLines.length; g++) {
-                    var gv = gridLines[g]
-                    var gy = pad.top + ch - (gv / 100) * ch
+                // ── Edges ─────────────────────────────────────────────────
+                var eds = [
+                    { a: { x: lx, y: cy }, b: nds[0], s: 0.16 },
+                    { a: { x: lx, y: cy }, b: nds[1], s: 0.12 },
+                    { a: nds[0],           b: nds[1],  s: 0.10 },
+                    { a: nds[0],           b: nds[2],  s: 0.18 },
+                    { a: nds[1],           b: nds[2],  s: 0.14 },
+                    { a: nds[2],           b: { x: rx, y: cy }, s: 0.17 },
+                    { a: nds[1],           b: { x: rx, y: cy }, s: 0.13 }
+                ]
+
+                // Draw edge lines
+                for (var e = 0; e < eds.length; e++) {
                     ctx.beginPath()
-                    ctx.moveTo(pad.left, gy)
-                    ctx.lineTo(pad.left + cw, gy)
+                    ctx.moveTo(eds[e].a.x, eds[e].a.y)
+                    ctx.lineTo(eds[e].b.x, eds[e].b.y)
+                    ctx.lineWidth   = 1
+                    ctx.strokeStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.20)
                     ctx.stroke()
-                    ctx.fillText(gv + "%", pad.left - 3, gy)
                 }
 
-                // ── Filled area ───────────────────────────────────────────
-                var n = data.length
-
-                function xPos(i) { return pad.left + (i / (n - 1)) * cw }
-                function yPos(v) { return pad.top  + ch - ((v - minV) / (maxV - minV)) * ch }
-
-                // Gradient fill
-                var grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch)
-                grad.addColorStop(0, Qt.rgba(pctColor.r, pctColor.g, pctColor.b, 0.35))
-                grad.addColorStop(1, Qt.rgba(pctColor.r, pctColor.g, pctColor.b, 0.02))
-
-                ctx.beginPath()
-                ctx.moveTo(xPos(0), yPos(data[0].pct))
-                for (var i = 1; i < n; i++) {
-                    // Smooth curve using cardinal spline control points
-                    var x0 = xPos(i - 1), y0 = yPos(data[i-1].pct)
-                    var x1 = xPos(i),     y1 = yPos(data[i].pct)
-                    var cpx = (x0 + x1) / 2
-                    ctx.bezierCurveTo(cpx, y0, cpx, y1, x1, y1)
+                // Draw packets
+                for (var p = 0; p < eds.length; p++) {
+                    for (var pass = 0; pass < 2; pass++) {
+                        var t  = ((tick * eds[p].s) + pass * 0.5) % 1.0
+                        var px = eds[p].a.x + (eds[p].b.x - eds[p].a.x) * t
+                        var py = eds[p].a.y + (eds[p].b.y - eds[p].a.y) * t
+                        ctx.beginPath()
+                        ctx.arc(px, py, 2, 0, Math.PI * 2)
+                        ctx.fillStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.45 + 0.55 * Math.sin(t * Math.PI))
+                        ctx.fill()
+                    }
                 }
-                ctx.lineTo(xPos(n - 1), pad.top + ch)
-                ctx.lineTo(xPos(0),     pad.top + ch)
-                ctx.closePath()
-                ctx.fillStyle = grad
-                ctx.fill()
 
-                // Line
-                ctx.beginPath()
-                ctx.moveTo(xPos(0), yPos(data[0].pct))
-                for (var j = 1; j < n; j++) {
-                    var ax = xPos(j - 1), ay = yPos(data[j-1].pct)
-                    var bx = xPos(j),     by = yPos(data[j].pct)
-                    var mc = (ax + bx) / 2
-                    ctx.bezierCurveTo(mc, ay, mc, by, bx, by)
+                // Draw nodes
+                for (var n = 0; n < nds.length; n++) {
+                    var nd  = nds[n]
+                    var pls = 0.5 + 0.5 * Math.sin(tick * 1.8 + n * 1.2)
+                    var gr  = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, 9 + pls * 5)
+                    gr.addColorStop(0, Qt.rgba(nc.r, nc.g, nc.b, 0.38 + pls * 0.18))
+                    gr.addColorStop(1, Qt.rgba(nc.r, nc.g, nc.b, 0))
+                    ctx.beginPath()
+                    ctx.arc(nd.x, nd.y, 9 + pls * 5, 0, Math.PI * 2)
+                    ctx.fillStyle = gr
+                    ctx.fill()
+                    ctx.beginPath()
+                    ctx.arc(nd.x, nd.y, 3, 0, Math.PI * 2)
+                    ctx.fillStyle = Qt.rgba(nc.r, nc.g, nc.b, 0.9)
+                    ctx.fill()
                 }
-                ctx.lineWidth   = 2
-                ctx.strokeStyle = pctColor
-                ctx.lineJoin    = "round"
-                ctx.stroke()
 
-                // Latest dot
-                var lx = xPos(n - 1)
-                var ly = yPos(data[n - 1].pct)
-                ctx.beginPath()
-                ctx.arc(lx, ly, 3.5, 0, Math.PI * 2)
-                ctx.fillStyle = pctColor
-                ctx.fill()
+                // ── XeroLinux watermark — RGB cycling gradient ────────────
+                var wRaw    = 0.5 + 0.5 * Math.sin(tick * 0.9)
+                var wEased  = wRaw < 0.5
+                              ? 4 * wRaw * wRaw * wRaw
+                              : 1 - Math.pow(-2 * wRaw + 2, 3) / 2
+                var hueBase = (tick * 35) % 360
+                var fAlpha  = 0.09 + wEased * 0.07
 
-                // ── X-axis time labels ────────────────────────────────────
-                ctx.fillStyle    = Qt.rgba(Kirigami.Theme.textColor.r,
-                                           Kirigami.Theme.textColor.g,
-                                           Kirigami.Theme.textColor.b, 0.4)
-                ctx.font         = "9px sans-serif"
+                var grad = ctx.createLinearGradient(0, 0, w, 0)
+                grad.addColorStop(0.00, hsl(hueBase +   0, 0.95, 0.65, fAlpha))
+                grad.addColorStop(0.25, hsl(hueBase +  90, 0.95, 0.65, fAlpha))
+                grad.addColorStop(0.50, hsl(hueBase + 180, 0.95, 0.65, fAlpha))
+                grad.addColorStop(0.75, hsl(hueBase + 270, 0.95, 0.65, fAlpha))
+                grad.addColorStop(1.00, hsl(hueBase + 360, 0.95, 0.65, fAlpha))
+
+                ctx.font         = "bold " + Math.round(h * 0.38) + "px '" + orbitronFont.name + "'"
                 ctx.textAlign    = "center"
-                ctx.textBaseline = "top"
-
-                // Show ~4 evenly-spaced time labels
-                var labelCount = Math.min(4, n)
-                for (var k = 0; k < labelCount; k++) {
-                    var idx = Math.round(k * (n - 1) / (labelCount - 1))
-                    ctx.fillText(data[idx].t, xPos(idx), pad.top + ch + 4)
-                }
-            }
-
-            Connections {
-                target: Kirigami.Theme
-                function onTextColorChanged() { chart.requestPaint() }
+                ctx.textBaseline = "middle"
+                ctx.shadowColor  = hsl(hueBase + 180, 1.0, 0.65, 0.5 * wEased)
+                ctx.shadowBlur   = wEased * 14
+                ctx.fillStyle    = grad
+                ctx.fillText("XeroLinux", cx, cy)
+                ctx.shadowBlur   = 0
+                ctx.shadowColor  = "transparent"
             }
         }
     }
