@@ -2,7 +2,7 @@
 
 KDE Plasma 6 panel widget showing IDM internet quota usage for ADSL and LTE connections.
 
-![IDMQM](IDMQM.png)
+![IDMQM](IDMQM.webp)
 
 ## Features
 
