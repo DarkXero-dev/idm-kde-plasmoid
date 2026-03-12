@@ -22,13 +22,21 @@ Item {
         // ── Gauge row ─────────────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.largeSpacing
+            Layout.fillHeight: false
+            Layout.preferredHeight: 155
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 48
+
+            // Gauge + stats grouped tightly together
+            RowLayout {
+                spacing: 16
+                Layout.alignment: Qt.AlignVCenter
 
             // Arc gauge
             Canvas {
                 id: gauge
-                width:  110
-                height: 110
+                width:  150
+                height: 150
                 Layout.alignment: Qt.AlignVCenter
 
                 property real pct: data_.error ? 0 : (data_.percent || 0)
@@ -73,7 +81,7 @@ Item {
                     ctx.fillStyle = loading
                         ? Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.4)
                         : data_.error ? "#e74c3c" : pctColor
-                    ctx.font          = "bold 20px sans-serif"
+                    ctx.font          = "bold 22px sans-serif"
                     ctx.textAlign     = "center"
                     ctx.textBaseline  = "middle"
                     ctx.fillText(
@@ -86,8 +94,8 @@ Item {
                     ctx.fillStyle    = Qt.rgba(Kirigami.Theme.textColor.r,
                                               Kirigami.Theme.textColor.g,
                                               Kirigami.Theme.textColor.b, 0.5)
-                    ctx.font         = "11px sans-serif"
-                    ctx.fillText("used", cx, cy + 14)
+                    ctx.font         = "12px sans-serif"
+                    ctx.fillText("used", cx, cy + 15)
                 }
 
                 // Repaint when theme or color changes
@@ -99,13 +107,13 @@ Item {
 
             // Stats column
             ColumnLayout {
-                Layout.preferredWidth: 120
+                Layout.preferredWidth: 160
                 Layout.alignment: Qt.AlignVCenter
-                spacing: 4
+                spacing: 6
 
                 PC3.Label {
                     text: "Remaining"
-                    font.pixelSize: 10
+                    font.pixelSize: 13
                     opacity: 0.5
                 }
                 PC3.Label {
@@ -113,39 +121,71 @@ Item {
                         : data_.error      ? data_.error
                         : data_.remaining  ? data_.remaining
                         : "—"
-                    font.pixelSize: 15
+                    font.pixelSize: 14
                     font.bold: true
                     color: data_.error ? "#e74c3c" : Kirigami.Theme.textColor
                     wrapMode: Text.WordWrap
                 }
 
-                Item { height: 4 }
+                Item { height: 6 }
 
                 PC3.Label {
                     text: "Updated"
-                    font.pixelSize: 10
+                    font.pixelSize: 13
                     opacity: 0.5
                 }
                 PC3.Label {
                     text: data_.updated ? data_.updated : "—"
-                    font.pixelSize: 12
+                    font.pixelSize: 16
                     opacity: 0.8
                 }
             }
 
-            // Logo fills the empty space to the right of the stats
-            Item {
+            } // end gauge+stats RowLayout
+
+            // "Current Provider" fills the space between gauge and logo
+            Canvas {
+                id: cpLabel
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                Image {
-                    anchors.centerIn: parent
-                    source: Qt.resolvedUrl("../images/logo.png")
-                    fillMode: Image.PreserveAspectFit
-                    width: Math.min(parent.width - Kirigami.Units.largeSpacing * 2, 180)
-                    height: 90
-                    opacity: 0.8
+                Component.onCompleted: requestPaint()
+                onWidthChanged:  requestPaint()
+                onHeightChanged: requestPaint()
+
+                Connections {
+                    target: orbitronFont
+                    function onStatusChanged() { cpLabel.requestPaint() }
                 }
+
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+
+                    var grad = ctx.createLinearGradient(0, 0, width, 0)
+                    grad.addColorStop(0,   "#3b82f6")
+                    grad.addColorStop(1,   "#ef4444")
+
+                    ctx.fillStyle   = grad
+                    ctx.globalAlpha = 0.30
+                    ctx.font         = "bold 36px '" + orbitronFont.name + "'"
+                    ctx.textAlign    = "left"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText("CURRENT",  20, height / 2 - 22)
+                    ctx.fillText("PROVIDER", 20, height / 2 + 22)
+                }
+            }
+
+            // Logo pinned to right edge
+            Image {
+                source: Qt.resolvedUrl("../images/logo.png")
+                fillMode: Image.PreserveAspectFit
+                width:  220
+                height: 110
+                sourceSize.width:  220
+                sourceSize.height: 110
+                opacity: 0.8
+                Layout.alignment: Qt.AlignVCenter
             }
         }
 

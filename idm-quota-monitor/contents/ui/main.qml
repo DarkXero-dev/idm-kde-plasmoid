@@ -213,9 +213,9 @@ PlasmoidItem {
 
     // ── Full popup: two tabs ──────────────────────────────────────────────
     fullRepresentation: Item {
-        Layout.preferredWidth:  640
-        Layout.minimumWidth:    640
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 20
+        Layout.preferredWidth:  980
+        Layout.minimumWidth:    980
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 26
 
         ColumnLayout {
             anchors.fill: parent
