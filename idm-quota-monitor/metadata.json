@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Name": "IDM Quota Monitor",
+        "Description": "Shows IDM internet quota usage",
+        "Icon": "network-connect",
+        "Id": "com.github.idm-quota-monitor",
+        "Version": "1.0",
+        "Authors": [{"Name": "techxero", "Email": ""}],
+        "License": "GPL-2.0-or-later",
+        "Category": "Online Services"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
