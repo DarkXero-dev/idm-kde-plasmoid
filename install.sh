@@ -21,10 +21,15 @@ else
     echo "    Unknown package manager — install python3-requests manually"
 fi
 
-# ── 2. Copy plasmoid ───────────────────────────────────────────────────────
+# ── 2. Copy plasmoid + bust QML cache ─────────────────────────────────────
 echo "==> Copying plasmoid to $PLASMOID_DEST"
 mkdir -p "$PLASMOID_DEST"
 rsync -a --exclude='history_*.json' "$PLASMOID_SRC/" "$PLASMOID_DEST/"
+
+echo "==> Clearing QML cache"
+find ~/.cache -maxdepth 4 \( -name "*.qmlc" -o -name "*.jsc" \) \
+     -path "*$PLASMOID_ID*" -delete 2>/dev/null
+rm -rf ~/.cache/plasmashell 2>/dev/null || true
 
 # ── 3. Install systemd units ───────────────────────────────────────────────
 echo "==> Installing systemd user units"
@@ -33,17 +38,14 @@ cp "$PLASMOID_SRC/idm-quota.timer" "$SYSTEMD_USER/"
 sed "s|PLACEHOLDER_USER|$(whoami)|g" \
     "$PLASMOID_SRC/idm-quota.service" > "$SYSTEMD_USER/idm-quota.service"
 
-# ── 4. Enable and start ────────────────────────────────────────────────────
-echo "==> Enabling + starting systemd timer"
+# ── 4. Reload systemd (timer stays off until enabled via widget Settings) ──
+echo "==> Reloading systemd user daemon"
 systemctl --user daemon-reload
-systemctl --user enable --now idm-quota.timer
-systemctl --user start idm-quota.service
 
 echo ""
 echo "Done. Next steps:"
 echo "  1. Restart plasmashell:  kquitapp6 plasmashell; plasmashell &"
 echo "  2. Right-click panel → Add Widgets → search 'IDM Quota'"
 echo "  3. Right-click widget → Configure → enter your IDM username and password"
-echo "  4. Click the ADSL/LTE badge on the panel to toggle which connection is shown"
-echo ""
-systemctl --user status idm-quota.timer --no-pager | grep -E "Active|Trigger"
+echo "  4. In widget Settings, toggle 'Enable timer' ON to start auto-refresh"
+echo "  5. Click the ADSL/LTE badge on the panel to toggle which connection is shown"

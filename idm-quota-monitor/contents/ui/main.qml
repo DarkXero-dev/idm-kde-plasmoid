@@ -30,11 +30,19 @@ PlasmoidItem {
     preferredRepresentation: compactRepresentation
 
     // ── Sync credentials to ~/.config/IDMQuota/config.conf ───────────────
+    property bool _refreshAfterWrite: false
+
     P5Support.DataSource {
         id: fileWriter
         engine: "executable"
         connectedSources: []
-        onNewData: (source, data) => { fileWriter.disconnectSource(source) }
+        onNewData: (source, data) => {
+            fileWriter.disconnectSource(source)
+            if (root._refreshAfterWrite) {
+                root._refreshAfterWrite = false
+                Qt.callLater(root.runScript)
+            }
+        }
     }
 
     function toHex(str) {
@@ -51,13 +59,20 @@ PlasmoidItem {
         fileWriter.connectSource("python3 " + scriptPath + " --write-config " + u + " " + p)
     }
 
+    Timer {
+        id: credentialsChangedTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            root._refreshAfterWrite = true
+            root.writeConfigFile()
+        }
+    }
+
     Connections {
         target: Plasmoid.configuration
-        function onValueChanged(key, value) {
-            if (key === "username" || key === "password") {
-                Qt.callLater(root.writeConfigFile)
-            }
-        }
+        function onUsernameChanged() { credentialsChangedTimer.restart() }
+        function onPasswordChanged() { credentialsChangedTimer.restart() }
     }
 
     Component.onCompleted: writeConfigFile()
@@ -198,8 +213,9 @@ PlasmoidItem {
 
     // ── Full popup: two tabs ──────────────────────────────────────────────
     fullRepresentation: Item {
-        implicitWidth:  Kirigami.Units.gridUnit * 20
-        implicitHeight: Kirigami.Units.gridUnit * 20
+        Layout.preferredWidth:  640
+        Layout.minimumWidth:    640
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 20
 
         ColumnLayout {
             anchors.fill: parent
