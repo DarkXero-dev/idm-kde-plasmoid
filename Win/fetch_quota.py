@@ -9,16 +9,18 @@ import re, json, os, sys, base64, hashlib, hmac
 from datetime import datetime
 import requests
 
-CONFIG_PATH = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
-                           "IDMQuota", "config.conf")
+CONFIG_PATH  = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
+                            "IDMQuota", "config.conf")
 
-LOGIN_URL = "https://myaccount.idm.net.lb/_layouts/15/IDMPortal/ManageUsers/Login.aspx"
+LOGIN_URL    = "https://myaccount.idm.net.lb/_layouts/15/IDMPortal/ManageUsers/Login.aspx"
+BASE_URL     = "https://myaccount.idm.net.lb"
+ACCOUNTS_URL = BASE_URL + "/_layouts/15/IDMPortal/ManageServices/MyAccounts.aspx"
+HISTORY_MAX  = 96
 
-CONNECTIONS = {
-    "adsl": "https://myaccount.idm.net.lb/_layouts/15/IDMPortal/ManageServices/ManageService.aspx?type=2&si=MTI2OTI=&ai=NTAyODQ0NjM=&pi=67185&un=TDk4NzU5Nw==&ps=MkpnYXg3ekQzWg==&an=WGVyb0RTTA==",
-    "lte":  "https://myaccount.idm.net.lb/_layouts/15/IDMPortal/ManageServices/ManageService.aspx?type=2&si=MjExMzM3&ai=NTA0NDM4NTE=&pi=67185&un=RzM2MTI4MA==&ps=QU5Z&an=WGVyb0xURQ==",
+_TYPE_MAP = {
+    "adsl": "adsl", "vdsl": "adsl", "fiber": "adsl",
+    "3g": "lte", "4g": "lte", "lte": "lte",
 }
-HISTORY_MAX = 96
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -159,8 +161,31 @@ def parse_expiry(date_str: str):
     return None, None
 
 
-def scrape(session, url: str) -> dict:
-    r = session.get(url, timeout=20)
+def discover_services(session) -> list:
+    """Scrape MyAccounts grid and return [{key, ctrl, page}] for each service."""
+    r = session.get(ACCOUNTS_URL, timeout=20)
+    r.raise_for_status()
+    services = []
+    rows = re.findall(
+        r'ResidentialServicesGridView_(ctl\d+)_ResidentialAccountName'
+        r'.*?_\1_Type[^>]*>([^<]+)<',
+        r.text, re.DOTALL)
+    for ctrl_id, svc_type in rows:
+        key = _TYPE_MAP.get(svc_type.strip().lower())
+        if key:
+            services.append({"key": key, "ctrl": ctrl_id, "page": r})
+    return services
+
+
+def scrape(session, ctrl_id: str, accounts_page_response) -> dict:
+    """Trigger Manage postback for ctrl_id, scrape the resulting service page."""
+    payload = extract_hidden_fields(accounts_page_response.text)
+    payload["__EVENTTARGET"] = (
+        f"ctl00$PlaceHolderMain$ResidentialServicesGridView"
+        f"${ctrl_id}$ManageResidentialButton")
+    payload["__EVENTARGUMENT"] = ""
+    r = session.post(ACCOUNTS_URL, data=payload, timeout=20,
+                     headers={"Referer": ACCOUNTS_URL}, allow_redirects=True)
     r.raise_for_status()
 
     pct = re.search(r'ctl00_PlaceHolderMain_TraficUsed[^>]*data-percent="([^"]+)"', r.text)
@@ -223,10 +248,15 @@ def fetch_all() -> dict:
     if "signInControl_UserName" in r.text:
         raise RuntimeError("Login failed — check username and password.")
 
+    services = discover_services(session)
+    if not services:
+        raise RuntimeError("No services found — check your account has ADSL or LTE")
+
     result = {}
-    for conn, url in CONNECTIONS.items():
+    for svc in services:
+        conn = svc["key"]
         try:
-            data = scrape(session, url)
+            data = scrape(session, svc["ctrl"], svc["page"])
         except Exception as e:
             data = {"percent": None, "remaining": None, "days_left": None,
                     "expiry": None, "expiry_time": None,
