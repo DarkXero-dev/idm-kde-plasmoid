@@ -23,7 +23,7 @@ jobs:
         working-directory: Win
         run: |
           python -m pip install --upgrade pip
-          pip install PyQt5==5.15.10 requests cryptography pyinstaller
+          pip install PyQt5==5.15.10 requests pyinstaller
 
       - name: Copy logo
         run: |

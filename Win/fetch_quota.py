@@ -5,10 +5,9 @@ Credentials stored AES-encrypted in %APPDATA%/IDMQuota/config.conf,
 key derived from the Windows MachineGuid (no external keystore needed).
 """
 
-import re, json, os, sys, base64, hashlib
+import re, json, os, sys, base64, hashlib, hmac
 from datetime import datetime
 import requests
-from cryptography.fernet import Fernet
 
 CONFIG_PATH = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
                            "IDMQuota", "config.conf")
@@ -28,7 +27,10 @@ HEADERS = {
 }
 
 
-# ── Encryption ────────────────────────────────────────────────────────────────
+# ── Encryption (stdlib only — no external crypto deps) ────────────────────────
+# Scheme: PBKDF2-HMAC-SHA256 key derivation + SHA-256 counter-mode stream
+#         cipher + HMAC-SHA256 authentication tag.
+# Token format (base64url): "v2:" + b64(salt[16] | hmac[32] | ciphertext)
 
 def _machine_key() -> str:
     """Return the Windows MachineGuid; fall back to hostname."""
@@ -42,17 +44,37 @@ def _machine_key() -> str:
         return socket.gethostname()
 
 
-def _fernet():
-    key = base64.urlsafe_b64encode(hashlib.sha256(_machine_key().encode()).digest())
-    return Fernet(key)
+def _derive_key(salt: bytes) -> bytes:
+    return hashlib.pbkdf2_hmac(
+        'sha256', _machine_key().encode('utf-8'), salt, 100_000)
+
+
+def _xor_stream(data: bytes, key: bytes) -> bytes:
+    """SHA-256 counter-mode keystream XOR."""
+    out, block = bytearray(len(data)), 32
+    for i in range(0, len(data), block):
+        ks = hashlib.sha256(key + i.to_bytes(8, 'big')).digest()
+        for j, b in enumerate(data[i:i + block]):
+            out[i + j] = b ^ ks[j]
+    return bytes(out)
 
 
 def _encrypt(plaintext: str) -> str:
-    return _fernet().encrypt(plaintext.encode()).decode()
+    salt = os.urandom(16)
+    key  = _derive_key(salt)
+    ct   = _xor_stream(plaintext.encode('utf-8'), key)
+    mac  = hmac.new(key, ct, hashlib.sha256).digest()
+    return "v2:" + base64.urlsafe_b64encode(salt + mac + ct).decode()
 
 
 def _decrypt(token: str) -> str:
-    return _fernet().decrypt(token.encode()).decode()
+    raw  = base64.urlsafe_b64decode(token[3:] + "==")   # strip "v2:"
+    salt, mac_stored, ct = raw[:16], raw[16:48], raw[48:]
+    key  = _derive_key(salt)
+    if not hmac.compare_digest(mac_stored,
+                               hmac.new(key, ct, hashlib.sha256).digest()):
+        raise ValueError("MAC mismatch — wrong machine or tampered file")
+    return _xor_stream(ct, key).decode('utf-8')
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -69,7 +91,7 @@ def read_config() -> dict:
     except FileNotFoundError:
         pass
     for key in ("username", "password"):
-        if key in config and config[key].startswith("gAAA"):
+        if key in config and config[key].startswith("v2:"):
             try:
                 config[key] = _decrypt(config[key])
             except Exception:
