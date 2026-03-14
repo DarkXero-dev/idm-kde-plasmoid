@@ -10,8 +10,22 @@ Modes:
 
 import re, json, os, sys, base64, hashlib
 from datetime import datetime
-import requests
-from cryptography.fernet import Fernet
+
+try:
+    import requests
+except ImportError:
+    _err = {"adsl": {"error": "Missing dependency: pip install requests"},
+            "lte":  {"error": "Missing dependency: pip install requests"},
+            "adsl_history": [], "lte_history": []}
+    print(json.dumps(_err)); sys.exit(1)
+
+try:
+    from cryptography.fernet import Fernet
+except ImportError:
+    _err = {"adsl": {"error": "Missing dependency: pip install cryptography"},
+            "lte":  {"error": "Missing dependency: pip install cryptography"},
+            "adsl_history": [], "lte_history": []}
+    print(json.dumps(_err)); sys.exit(1)
 
 
 def _fernet():

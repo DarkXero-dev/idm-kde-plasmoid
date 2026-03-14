@@ -9,17 +9,26 @@ PLASMOID_ID="com.github.idm-quota-monitor"
 PLASMOID_DEST="$HOME/.local/share/plasma/plasmoids/$PLASMOID_ID"
 SYSTEMD_USER="$HOME/.config/systemd/user"
 
-# ── 1. Install python-requests ─────────────────────────────────────────────
-echo "==> Installing python-requests"
+# ── 1. Install Python dependencies ─────────────────────────────────────────
+echo "==> Installing Python dependencies (requests, cryptography)"
 if command -v pacman &>/dev/null; then
-    sudo pacman -S --needed --noconfirm python-requests
+    sudo pacman -S --needed --noconfirm python-requests python-cryptography
 elif command -v apt &>/dev/null; then
-    sudo apt install -y python3-requests
+    sudo apt install -y python3-requests python3-cryptography
 elif command -v dnf &>/dev/null; then
-    sudo dnf install -y python3-requests
+    sudo dnf install -y python3-requests python3-cryptography
 else
-    echo "    Unknown package manager — install python3-requests manually"
+    echo "    Unknown package manager — falling back to pip"
 fi
+
+# Verify both are importable; pip-install anything still missing
+for pkg in requests "cryptography.fernet"; do
+    python3 -c "import $pkg" 2>/dev/null || {
+        pip_pkg="${pkg%%.*}"   # strip submodule for pip name
+        echo "    $pip_pkg not found via system package — installing with pip"
+        pip install --user "$pip_pkg"
+    }
+done
 
 # ── 2. Copy plasmoid + bust QML cache ─────────────────────────────────────
 echo "==> Copying plasmoid to $PLASMOID_DEST"
