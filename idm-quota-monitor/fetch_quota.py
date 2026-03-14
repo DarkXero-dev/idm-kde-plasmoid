@@ -75,18 +75,72 @@ def save_history(conn, history):
         json.dump(history[-HISTORY_MAX:], f)
 
 
+def parse_expiry(date_str):
+    """Return (days_remaining, time_str_or_None). Negative days = already expired."""
+    s = date_str.strip().replace('\xa0', ' ')
+    # Try datetime formats first (date + time)
+    for fmt in ("%m/%d/%Y %H:%M", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M", "%d-%m-%Y %H:%M",
+                "%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            exp = datetime.strptime(s, fmt)
+            days = (exp.date() - datetime.now().date()).days
+            return days, exp.strftime("%H:%M")
+        except ValueError:
+            continue
+    # Date-only formats
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y"):
+        try:
+            exp = datetime.strptime(s, fmt)
+            days = (exp.date() - datetime.now().date()).days
+            return days, None
+        except ValueError:
+            continue
+    return None, None
+
+
 def scrape(session, url):
     r = session.get(url, timeout=20)
     r.raise_for_status()
     pct = re.search(r'ctl00_PlaceHolderMain_TraficUsed[^>]*data-percent="([^"]+)"', r.text)
     rem = re.search(r'id="ctl00_PlaceHolderMain_RemainingLabel"[^>]*>([^<]+)<', r.text)
+    # Pattern 1: "Expiry Date</td><td...>DATE TIME</td>" (LTE table layout)
+    exp = re.search(
+        r'Expiry\s+Date\s*</td>\s*<td[^>]*>\s*'
+        r'(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{2,4}[\s\xa0]+\d{2}:\d{2}(?::\d{2})?)',
+        r.text, re.IGNORECASE)
+    # Pattern 2: label element with ID (ADSL layout)
+    if not exp:
+        exp = re.search(
+            r'id="ctl00_PlaceHolderMain_ExpiryDateLabel"[^>]*>([^<]+)<',
+            r.text)
+    # Pattern 3: data attributes near expiry keyword
+    if not exp:
+        exp = re.search(
+            r'(?:ExpiryDate|EndDate|expiry|expire)[^>]*?'
+            r'(?:data-\w+|value|title|datetime)=["\']'
+            r'(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{2,4}(?:[T \t]\d{2}:\d{2}(?::\d{2})?)?)["\']',
+            r.text, re.IGNORECASE)
+    # Pattern 4: wide sweep fallback
+    if not exp:
+        exp = re.search(
+            r'(?:expir\w*|end\s*date)[^<]{0,80}?'
+            r'(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{2,4}(?:[T \t\xa0]\d{2}:\d{2}(?::\d{2})?)?)',
+            r.text, re.IGNORECASE)
     if not pct and not rem:
         raise ValueError("Could not find quota elements")
+    exp_str          = exp.group(1).strip() if exp else None
+    days_left, exp_time = parse_expiry(exp_str) if exp_str else (None, None)
+    # Debug: log raw expiry string to stderr so we can see what the portal returns
+    if exp_str:
+        import sys; print(f"[expiry raw] {exp_str!r}", file=sys.stderr)
     return {
-        "percent":   round(float(pct.group(1)), 2) if pct else None,
-        "remaining": rem.group(1).strip() if rem else None,
-        "updated":   datetime.now().strftime("%H:%M"),
-        "error":     None,
+        "percent":    round(float(pct.group(1)), 2) if pct else None,
+        "remaining":  rem.group(1).strip() if rem else None,
+        "days_left":  days_left,
+        "expiry":     exp_str,
+        "expiry_time": exp_time,
+        "updated":    datetime.now().strftime("%H:%M"),
+        "error":      None,
     }
 
 

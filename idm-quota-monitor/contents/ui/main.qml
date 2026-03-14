@@ -11,8 +11,8 @@ PlasmoidItem {
     readonly property string scriptPath: Qt.resolvedUrl("../../fetch_quota.py").toString().replace("file://", "")
 
     // Per-connection data
-    property var adsl: ({ percent: 0, remaining: "", updated: "", error: "" })
-    property var lte:  ({ percent: 0, remaining: "", updated: "", error: "" })
+    property var adsl: ({ percent: 0, remaining: "", updated: "", days_left: null, expiry: "", expiry_time: null, error: "" })
+    property var lte:  ({ percent: 0, remaining: "", updated: "", days_left: null, expiry: "", expiry_time: null, error: "" })
     property var adslHistory: []
     property var lteHistory:  []
 
@@ -215,7 +215,7 @@ PlasmoidItem {
     fullRepresentation: Item {
         Layout.preferredWidth:  980
         Layout.minimumWidth:    980
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 26
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 28
 
         ColumnLayout {
             anchors.fill: parent

@@ -23,7 +23,7 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: false
-            Layout.preferredHeight: 155
+            Layout.preferredHeight: 185
             Layout.alignment: Qt.AlignVCenter
             spacing: 48
 
@@ -107,8 +107,8 @@ Item {
 
             // Stats column
             ColumnLayout {
-                Layout.preferredWidth: 160
-                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 130
+                Layout.alignment: Qt.AlignTop
                 spacing: 6
 
                 PC3.Label {
@@ -137,6 +137,28 @@ Item {
                 PC3.Label {
                     text: data_.updated ? data_.updated : "—"
                     font.pixelSize: 16
+                    opacity: 0.8
+                }
+
+                Item { height: 2 }
+
+                PC3.Label {
+                    text: "Expires In"
+                    font.pixelSize: 13
+                    opacity: 0.5
+                }
+                PC3.Label {
+                    text: data_.days_left === null || data_.days_left === undefined ? "—"
+                        : data_.days_left < 0   ? "Expired"
+                        : data_.days_left === 0  ? (data_.expiry_time ? "Today at " + data_.expiry_time : "Today")
+                        : data_.days_left + " days"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: data_.days_left !== null && data_.days_left < 0    ? "#e74c3c"
+                         : data_.days_left !== null && data_.days_left === 0  ? "#f39c12"
+                         : data_.days_left !== null && data_.days_left <= 5   ? "#f39c12"
+                         : data_.days_left !== null && data_.days_left <= 14  ? Kirigami.Theme.textColor
+                         : Kirigami.Theme.textColor
                     opacity: 0.8
                 }
             }
