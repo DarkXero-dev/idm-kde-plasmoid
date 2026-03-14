@@ -423,6 +423,9 @@ class TrayIcon(QSystemTrayIcon):
         self._window = window
         window._tray = self
 
+        self._active = "adsl"   # which service the icon currently shows
+        self._data   = {}
+
         self.setIcon(self._make_icon(None, None))
         self.setToolTip(APP_NAME)
 
@@ -459,7 +462,10 @@ class TrayIcon(QSystemTrayIcon):
 
     def _on_activate(self, reason):
         if reason == QSystemTrayIcon.Trigger:
-            self._show()
+            # Left-click toggles between ADSL and LTE
+            self._active = "lte" if self._active == "adsl" else "adsl"
+            self.update_data(self._data)
+
 
     def _show(self):
         self._window.show()
@@ -467,8 +473,10 @@ class TrayIcon(QSystemTrayIcon):
         self._window.activateWindow()
 
     def update_data(self, data: dict):
-        adsl = data.get("adsl", {})
-        lte  = data.get("lte",  {})
+        if data:
+            self._data = data
+        adsl = self._data.get("adsl", {})
+        lte  = self._data.get("lte",  {})
         ap   = adsl.get("percent")
         lp   = lte.get("percent")
 
@@ -477,38 +485,45 @@ class TrayIcon(QSystemTrayIcon):
         self._lte_act.setText(
             f"LTE:  {lp:.1f}%  —  {lte.get('remaining', '')}"  if lp is not None else "LTE: —")
 
-        self.setIcon(self._make_icon(ap, lp))
-        if ap is not None and lp is not None:
-            self.setToolTip(
-                f"{APP_NAME}\n"
-                f"ADSL {ap:.1f}%  {adsl.get('remaining','')}\n"
-                f"LTE  {lp:.1f}%  {lte.get('remaining','')}")
+        # Icon and tooltip reflect the active service
+        svc   = adsl if self._active == "adsl" else lte
+        pct   = svc.get("percent")
+        label = "ADSL" if self._active == "adsl" else "LTE"
+        self.setIcon(self._make_icon(pct))
+        self.setToolTip(
+            f"{APP_NAME}  [{label}]\n"
+            f"{pct:.1f}%  {svc.get('remaining', '')}\n"
+            f"Click icon to switch service"
+            if pct is not None else APP_NAME)
 
-    def _make_icon(self, ap, lp):
-        """Draw a 64×64 dual-arc tray icon (ADSL outer, LTE inner)."""
-        sz  = 64
-        pix = QPixmap(sz, sz)
+    def _make_icon(self, pct):
+        """Draw a 64×64 single-arc tray icon for the active service."""
+        sz   = 64
+        pix  = QPixmap(sz, sz)
         pix.fill(Qt.transparent)
-        p = QPainter(pix)
+        p    = QPainter(pix)
         p.setRenderHint(QPainter.Antialiasing)
 
-        def draw_arc(rect, pct, color, track_w):
-            p.setPen(QPen(QColor(255, 255, 255, 30), track_w, Qt.SolidLine, Qt.RoundCap))
-            p.drawArc(rect, 225 * 16, -270 * 16)
-            if pct is not None and pct > 0:
-                p.setPen(QPen(QColor(color), track_w, Qt.SolidLine, Qt.RoundCap))
-                p.drawArc(rect, 225 * 16, int(-270 * 16 * pct / 100))
+        color = pct_color(pct)
+        rect  = QRectF(5, 5, 54, 54)
 
-        cx = cy = sz / 2
-        draw_arc(QRectF(4,  4,  56, 56), ap, pct_color(ap), 7)
-        draw_arc(QRectF(14, 14, 36, 36), lp, pct_color(lp), 5)
+        p.setPen(QPen(QColor(255, 255, 255, 30), 8, Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(rect, 225 * 16, -270 * 16)
 
-        # Show dominant % as text
-        pct = ap if ap is not None else lp
+        if pct is not None and pct > 0:
+            p.setPen(QPen(QColor(color), 8, Qt.SolidLine, Qt.RoundCap))
+            p.drawArc(rect, 225 * 16, int(-270 * 16 * pct / 100))
+
         if pct is not None:
-            p.setPen(QColor(pct_color(pct)))
-            p.setFont(QFont("Arial", 11, QFont.Bold))
+            p.setPen(QColor(color))
+            p.setFont(QFont("Arial", 12, QFont.Bold))
             p.drawText(QRectF(0, 0, sz, sz), Qt.AlignCenter, f"{int(pct)}%")
+
+        # Small label showing which service is active
+        label = "ADSL" if self._active == "adsl" else "LTE"
+        p.setPen(QColor(MUTED))
+        p.setFont(QFont("Arial", 7))
+        p.drawText(QRectF(0, sz - 14, sz, 12), Qt.AlignHCenter, label)
 
         p.end()
         return QIcon(pix)
