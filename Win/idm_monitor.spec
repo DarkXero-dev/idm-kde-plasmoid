@@ -10,12 +10,11 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        ('logo.png', '.'),          # IDM logo bundled alongside exe
+        ('logo.png',    '.'),       # IDM logo bundled alongside exe
+        ('IDMLB.ico',   '.'),       # App icon bundled alongside exe
     ],
     hiddenimports=[
         'pkg_resources.py2_compat',
-        'cryptography.hazmat.primitives.kdf.pbkdf2',
-        'cryptography.hazmat.backends.openssl',
         'requests.packages.urllib3',
         'charset_normalizer',
     ],
@@ -53,6 +52,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,                      # add a 256x256 icon.ico here to set a custom icon
+    icon='IDMLB.ico',               # app icon embedded in the exe
     version_file=None,
 )

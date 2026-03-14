@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QPushButton, QDialog, QLineEdit, QFormLayout,
     QDialogButtonBox, QSystemTrayIcon, QMenu, QAction,
-    QSizePolicy, QGraphicsOpacityEffect,
+    QSizePolicy, QGraphicsOpacityEffect, QCheckBox,
 )
 from PyQt5.QtGui  import (
     QPainter, QColor, QPen, QFont, QLinearGradient,
@@ -29,6 +29,9 @@ REFRESH_MS = 15 * 60 * 1000   # 15 minutes
 # Resolve paths whether running as script or frozen .exe
 BASE_DIR   = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 LOGO_PATH  = os.path.join(BASE_DIR, "logo.png")
+ICON_PATH  = os.path.join(BASE_DIR, "IDMLB.ico")
+STARTUP_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+STARTUP_NAME = "IDMQuotaMonitor"
 
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -42,6 +45,40 @@ RED     = "#e74c3c"
 BLUE    = "#3b82f6"
 TEXT    = "#e0e4f0"
 MUTED   = "#6b7280"
+
+
+# ── Startup registry helpers ──────────────────────────────────────────────────
+
+def _startup_exe() -> str:
+    """Return the path to register — the frozen .exe or the script itself."""
+    return sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__)
+
+
+def is_startup_enabled() -> bool:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_KEY) as k:
+            winreg.QueryValueEx(k, STARTUP_NAME)
+            return True
+    except Exception:
+        return False
+
+
+def set_startup(enabled: bool):
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_KEY,
+                            0, winreg.KEY_SET_VALUE) as k:
+            if enabled:
+                winreg.SetValueEx(k, STARTUP_NAME, 0, winreg.REG_SZ,
+                                  f'"{_startup_exe()}"')
+            else:
+                try:
+                    winreg.DeleteValue(k, STARTUP_NAME)
+                except FileNotFoundError:
+                    pass
+    except Exception as e:
+        print(f"[startup] {e}", file=sys.stderr)
 
 
 def pct_color(pct):
@@ -279,6 +316,11 @@ class SettingsDialog(QDialog):
         form.addRow("Username:", self.u_edit)
         form.addRow("Password:", self.p_edit)
 
+        self.startup_chk = QCheckBox("Launch on Windows startup")
+        self.startup_chk.setStyleSheet(f"color:{TEXT}; font-size:11px; margin-top:8px;")
+        self.startup_chk.setChecked(is_startup_enabled())
+        form.addRow(self.startup_chk)
+
         btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         btns.setStyleSheet(f"QPushButton {{ background:{BG}; color:{TEXT};"
                            f" border:1px solid {SEP}; border-radius:4px; padding:5px 12px; }}")
@@ -292,6 +334,7 @@ class SettingsDialog(QDialog):
         if u and p:
             fq.write_config(u, p)
             self.saved.emit(u, p)
+        set_startup(self.startup_chk.isChecked())
         self.accept()
 
 
@@ -303,6 +346,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.setMinimumSize(900, 300)
         self.setStyleSheet(f"QMainWindow {{ background:{BG}; color:{TEXT}; }}")
+        if os.path.exists(ICON_PATH):
+            self.setWindowIcon(QIcon(ICON_PATH))
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -444,7 +489,7 @@ class TrayIcon(QSystemTrayIcon):
         self._active = "adsl"   # which service the icon currently shows
         self._data   = {}
 
-        self.setIcon(self._make_icon(None))
+        self.setIcon(QIcon(ICON_PATH) if os.path.exists(ICON_PATH) else self._make_icon(None))
         self.setToolTip(APP_NAME)
 
         menu = QMenu()
@@ -561,6 +606,9 @@ def main():
     app.setStyle("Fusion")             # consistent look across all Windows versions
     app.setStyleSheet(
         "QWidget { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; }")
+
+    if os.path.exists(ICON_PATH):
+        app.setWindowIcon(QIcon(ICON_PATH))
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print("No system tray available.", file=sys.stderr)
