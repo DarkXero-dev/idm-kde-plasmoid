@@ -1,0 +1,7 @@
+# Runtime
+PyQt5==5.15.10
+requests
+cryptography
+
+# Build (Windows only)
+pyinstaller

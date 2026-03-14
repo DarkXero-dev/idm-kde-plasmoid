@@ -1,0 +1,42 @@
+name: Build Windows EXE
+
+on:
+  push:
+    paths:
+      - 'Win/**'
+  workflow_dispatch:   # also allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    runs-on: windows-latest   # real Windows Server runner (Win7 compat via Python 3.8)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"   # last version supporting Windows 7
+
+      - name: Install dependencies
+        working-directory: Win
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt5==5.15.10 requests cryptography pyinstaller
+
+      - name: Copy logo
+        run: |
+          copy "idm-quota-monitor\contents\images\logo.png" "Win\logo.png"
+
+      - name: Build EXE
+        working-directory: Win
+        run: |
+          pyinstaller idm_monitor.spec --clean
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IDMQuotaMonitor-Windows
+          path: Win/dist/IDMQuotaMonitor.exe
+          retention-days: 30
