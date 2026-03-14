@@ -150,61 +150,61 @@ class GradientLabel(QWidget):
 # ── Single connection tab ─────────────────────────────────────────────────────
 
 class ConnectionTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, label="", parent=None):
         super().__init__(parent)
         self.setStyleSheet(f"background:{BG};")
 
-        root = QHBoxLayout(self)
-        root.setContentsMargins(24, 16, 24, 16)
-        root.setSpacing(0)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(16, 12, 16, 12)
+        outer.setSpacing(6)
 
-        # Gauge
+        # Service label header
+        hdr_lbl = QLabel(label)
+        hdr_lbl.setAlignment(Qt.AlignCenter)
+        hdr_lbl.setStyleSheet(
+            f"color:{MUTED}; font-size:11px; font-weight:bold; letter-spacing:2px;")
+        outer.addWidget(hdr_lbl)
+
+        # Gauge + stats row, centered
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        row.addStretch()
+
         self.gauge = GaugeWidget()
-        root.addWidget(self.gauge, 0, Qt.AlignVCenter)
-        root.addSpacing(20)
+        row.addWidget(self.gauge, 0, Qt.AlignVCenter)
 
         # Stats
         stats = QVBoxLayout()
         stats.setSpacing(0)
         stats.setContentsMargins(0, 0, 0, 0)
 
-        def hdr(text):
+        def shdr(text):
             l = QLabel(text)
             l.setStyleSheet(f"color:{MUTED}; font-size:10px; margin-top:6px;")
             return l
 
         def val(size=13, bold=False):
             l = QLabel("—")
-            w = "bold" if bold else "normal"
-            l.setStyleSheet(f"color:{TEXT}; font-size:{size}px; font-weight:{w};")
+            l.setStyleSheet(
+                f"color:{TEXT}; font-size:{size}px;"
+                f" font-weight:{'bold' if bold else 'normal'};")
             return l
 
         self.lbl_rem = val(13, bold=True)
         self.lbl_upd = val(12)
         self.lbl_exp = val(12, bold=True)
 
-        for h, v in (("Remaining", self.lbl_rem),
-                     ("Updated",   self.lbl_upd),
-                     ("Expires In",self.lbl_exp)):
-            stats.addWidget(hdr(h))
+        for h, v in (("Remaining",  self.lbl_rem),
+                     ("Updated",    self.lbl_upd),
+                     ("Expires In", self.lbl_exp)):
+            stats.addWidget(shdr(h))
             stats.addWidget(v)
 
         stats.addStretch()
-        root.addLayout(stats)
-
-        # "CURRENT PROVIDER" gradient fill
-        self.cp = GradientLabel()
-        root.addWidget(self.cp, 1)
-
-        # Logo
-        self.logo_lbl = QLabel()
-        self.logo_lbl.setFixedSize(200, 100)
-        self.logo_lbl.setAlignment(Qt.AlignCenter)
-        if os.path.exists(LOGO_PATH):
-            pix = QPixmap(LOGO_PATH).scaled(
-                200, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.logo_lbl.setPixmap(pix)
-        root.addWidget(self.logo_lbl, 0, Qt.AlignVCenter)
+        row.addLayout(stats)
+        row.addStretch()
+        outer.addLayout(row)
+        outer.addStretch()
 
     def refresh(self, data: dict, loading: bool):
         pct   = data.get("percent") or 0
@@ -310,21 +310,39 @@ class MainWindow(QMainWindow):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        # Tabs
-        self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(f"""
-            QTabWidget::pane  {{ border:none; background:{BG}; }}
-            QTabBar::tab      {{ background:{BG_CARD}; color:{MUTED};
-                                  padding:8px 32px; border:none;
-                                  font-size:11px; font-weight:bold; letter-spacing:1px; }}
-            QTabBar::tab:selected {{ color:{TEXT}; background:{BG};
-                                      border-bottom:2px solid {BLUE}; }}
-        """)
-        self.tab_adsl = ConnectionTab()
-        self.tab_lte  = ConnectionTab()
-        self.tabs.addTab(self.tab_adsl, "ADSL")
-        self.tabs.addTab(self.tab_lte,  "LTE")
-        vbox.addWidget(self.tabs)
+        # Side-by-side: ADSL | logo | LTE
+        body = QWidget()
+        body.setStyleSheet(f"background:{BG};")
+        row  = QHBoxLayout(body)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+
+        self.tab_adsl = ConnectionTab("ADSL")
+        self.tab_lte  = ConnectionTab("LTE")
+
+        row.addWidget(self.tab_adsl, 1)
+
+        # Vertical separator
+        sep1 = QFrame(); sep1.setFrameShape(QFrame.VLine)
+        sep1.setStyleSheet(f"color:{SEP};"); row.addWidget(sep1)
+
+        # Center logo
+        logo_widget = QLabel()
+        logo_widget.setFixedWidth(200)
+        logo_widget.setAlignment(Qt.AlignCenter)
+        logo_widget.setStyleSheet(f"background:{BG};")
+        if os.path.exists(LOGO_PATH):
+            pix = QPixmap(LOGO_PATH).scaled(
+                180, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            logo_widget.setPixmap(pix)
+        row.addWidget(logo_widget)
+
+        # Vertical separator
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.VLine)
+        sep2.setStyleSheet(f"color:{SEP};"); row.addWidget(sep2)
+
+        row.addWidget(self.tab_lte, 1)
+        vbox.addWidget(body, 1)
 
         # Footer separator
         sep = QFrame()
@@ -438,10 +456,8 @@ class TrayIcon(QSystemTrayIcon):
             QMenu::separator {{ background:{SEP}; height:1px; margin:4px 8px; }}
         """)
 
-        self._adsl_act = QAction("ADSL: —", menu)
-        self._lte_act  = QAction("LTE:  —", menu)
-        self._adsl_act.setEnabled(False)
-        self._lte_act.setEnabled(False)
+        self._adsl_act = QAction("ADSL: —", menu); self._adsl_act.setEnabled(False)
+        self._lte_act  = QAction("LTE:  —", menu); self._lte_act.setEnabled(False)
         menu.addAction(self._adsl_act)
         menu.addAction(self._lte_act)
         menu.addSeparator()
