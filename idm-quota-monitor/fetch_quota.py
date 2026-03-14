@@ -8,9 +8,26 @@ Modes:
   fetch_quota.py --write-config B64U B64P   save credentials (base64-encoded args)
 """
 
-import re, json, os, sys
+import re, json, os, sys, base64, hashlib
 from datetime import datetime
 import requests
+from cryptography.fernet import Fernet
+
+
+def _fernet():
+    """Derive a Fernet key from this machine's unique ID."""
+    with open("/etc/machine-id") as f:
+        mid = f.read().strip()
+    key = base64.urlsafe_b64encode(hashlib.sha256(mid.encode()).digest())
+    return Fernet(key)
+
+
+def _encrypt(plaintext: str) -> str:
+    return _fernet().encrypt(plaintext.encode()).decode()
+
+
+def _decrypt(token: str) -> str:
+    return _fernet().decrypt(token.encode()).decode()
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.expanduser("~/.config/IDMQuota/config.conf")
@@ -40,13 +57,20 @@ def read_config():
                     config[k.strip()] = v.strip()
     except FileNotFoundError:
         pass
+    # Decrypt values if they look like Fernet tokens (start with 'gAAA')
+    for key in ("username", "password"):
+        if key in config and config[key].startswith("gAAA"):
+            try:
+                config[key] = _decrypt(config[key])
+            except Exception:
+                pass
     return config
 
 
 def write_config(username, password):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with open(CONFIG_PATH, "w") as f:
-        f.write(f"username={username}\npassword={password}\n")
+        f.write(f"username={_encrypt(username)}\npassword={_encrypt(password)}\n")
 
 
 def extract_hidden_fields(html):
