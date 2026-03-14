@@ -213,9 +213,8 @@ PlasmoidItem {
 
     // ── Full popup: single view, ADSL left — logo center — LTE right ─────
     fullRepresentation: Item {
-        Layout.preferredWidth:  980
-        Layout.minimumWidth:    980
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 22
+        Layout.preferredWidth:  958
+        Layout.preferredHeight: 327
 
         ColumnLayout {
             anchors.fill: parent
@@ -228,81 +227,119 @@ PlasmoidItem {
                 Layout.fillHeight: true
                 spacing: 0
 
-                // ADSL
                 ConnectionTab {
                     Layout.fillWidth:  true
                     Layout.fillHeight: true
                     data_:    root.adsl
-                    history:  root.adslHistory
                     loading:  root.loading
                     pctColor: root.pctColor(root.adsl.percent)
                     label:    "ADSL"
                 }
 
-                // Vertical separator
-                Rectangle {
-                    width: 1
-                    Layout.fillHeight: true
-                    color: Kirigami.Theme.separatorColor
-                    opacity: 0.4
+                Image {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: -25
+                    source: Qt.resolvedUrl("../images/logo.png")
+                    fillMode: Image.PreserveAspectFit
+                    width:  230
+                    height: 115
+                    sourceSize.width:  230
+                    sourceSize.height: 115
+                    opacity: 0.85
                 }
 
-                // Center logo
-                Item {
-                    Layout.preferredWidth:  220
-                    Layout.fillHeight: true
-
-                    Image {
-                        anchors.centerIn: parent
-                        source: Qt.resolvedUrl("../images/logo.png")
-                        fillMode: Image.PreserveAspectFit
-                        width:  200
-                        height: 100
-                        sourceSize.width:  200
-                        sourceSize.height: 100
-                        opacity: 0.85
-                    }
-                }
-
-                // Vertical separator
-                Rectangle {
-                    width: 1
-                    Layout.fillHeight: true
-                    color: Kirigami.Theme.separatorColor
-                    opacity: 0.4
-                }
-
-                // LTE
                 ConnectionTab {
                     Layout.fillWidth:  true
                     Layout.fillHeight: true
                     data_:    root.lte
-                    history:  root.lteHistory
                     loading:  root.loading
                     pctColor: root.pctColor(root.lte.percent)
                     label:    "LTE"
                 }
             }
 
-            // Footer
-            Rectangle {
+            // ── Footer ────────────────────────────────────────────────────
+            Canvas {
+                id: eolBar
                 Layout.fillWidth: true
-                height: 1
-                color: Kirigami.Theme.separatorColor
+                height: 38
+
+                property real tick: 0
+
+                Timer {
+                    interval: 32; running: true; repeat: true
+                    onTriggered: { eolBar.tick += 0.016; eolBar.requestPaint() }
+                }
+
+                function hsl(h, s, l, a) {
+                    h = ((h % 360) + 360) % 360 / 360
+                    var q = l < 0.5 ? l*(1+s) : l+s-l*s
+                    var p = 2*l - q
+                    function c(t) {
+                        if (t<0) t+=1; if (t>1) t-=1
+                        if (t<1/6) return p+(q-p)*6*t
+                        if (t<1/2) return q
+                        if (t<2/3) return p+(q-p)*(2/3-t)*6
+                        return p
+                    }
+                    return Qt.rgba(c(h+1/3), c(h), c(h-1/3), a)
+                }
+
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.clearRect(0, 0, width, height)
+
+                    var cx      = width / 2
+                    var cy      = height / 2
+                    var hueBase = (tick * 40) % 360
+                    var pulse   = 0.5 + 0.5 * Math.sin(tick * 1.8)
+                    var text    = "~~~~~~~~~~~~  End Of Line  ~~~~~~~~~~~~"
+
+                    ctx.font         = "bold 19px sans-serif"
+                    ctx.textAlign    = "center"
+                    ctx.textBaseline = "middle"
+
+                    // Glow passes
+                    for (var g = 3; g >= 1; g--) {
+                        ctx.shadowColor = hsl(hueBase + 180, 1.0, 0.65, 0.6 * pulse)
+                        ctx.shadowBlur  = g * 11
+                        var grad = ctx.createLinearGradient(0, 0, width, 0)
+                        grad.addColorStop(0.00, hsl(hueBase +   0, 0.95, 0.65, 0.15))
+                        grad.addColorStop(0.25, hsl(hueBase +  90, 0.95, 0.65, 0.15))
+                        grad.addColorStop(0.50, hsl(hueBase + 180, 0.95, 0.65, 0.15))
+                        grad.addColorStop(0.75, hsl(hueBase + 270, 0.95, 0.65, 0.15))
+                        grad.addColorStop(1.00, hsl(hueBase + 360, 0.95, 0.65, 0.15))
+                        ctx.fillStyle = grad
+                        ctx.fillText(text, cx, cy)
+                    }
+
+                    // Main text with RGB gradient
+                    ctx.shadowBlur  = 14 * pulse
+                    ctx.shadowColor = hsl(hueBase + 180, 1.0, 0.65, 0.7 * pulse)
+                    var mainGrad = ctx.createLinearGradient(0, 0, width, 0)
+                    mainGrad.addColorStop(0.00, hsl(hueBase +   0, 0.95, 0.70, 0.85))
+                    mainGrad.addColorStop(0.25, hsl(hueBase +  90, 0.95, 0.70, 0.85))
+                    mainGrad.addColorStop(0.50, hsl(hueBase + 180, 0.95, 0.70, 0.85))
+                    mainGrad.addColorStop(0.75, hsl(hueBase + 270, 0.95, 0.70, 0.85))
+                    mainGrad.addColorStop(1.00, hsl(hueBase + 360, 0.95, 0.70, 0.85))
+                    ctx.fillStyle = mainGrad
+                    ctx.fillText(text, cx, cy)
+                    ctx.shadowBlur  = 0
+                    ctx.shadowColor = "transparent"
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 Layout.margins: Kirigami.Units.smallSpacing
 
-                PC3.Label {
-                    visible: !root.configured
-                    text: "⚙ Right-click → Configure to set credentials"
-                    font.pixelSize: 10
-                    opacity: 0.65
-                    Layout.fillWidth: true
+                PC3.Button {
+                    text: "Settings"
+                    icon.name: "configure"
+                    onClicked: Plasmoid.internalAction("configure").trigger()
                 }
-                Item { Layout.fillWidth: true; visible: root.configured }
+
+                Item { Layout.fillWidth: true }
 
                 PC3.Button {
                     text: root.loading ? "Loading…" : "Refresh"
