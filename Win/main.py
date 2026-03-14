@@ -29,7 +29,10 @@ REFRESH_MS = 15 * 60 * 1000   # 15 minutes
 # Resolve paths whether running as script or frozen .exe
 BASE_DIR   = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 LOGO_PATH  = os.path.join(BASE_DIR, "logo.png")
-ICON_PATH  = os.path.join(BASE_DIR, "IDMLB.ico")
+# When frozen, load the icon from the exe itself (already embedded as PE resource).
+# When running as a script, fall back to the .ico file next to main.py.
+ICON_PATH  = sys.executable if getattr(sys, "frozen", False) \
+             else os.path.join(os.path.dirname(os.path.abspath(__file__)), "IDMLB.ico")
 STARTUP_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 STARTUP_NAME = "IDMQuotaMonitor"
 

@@ -10,8 +10,7 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        ('logo.png',    '.'),       # IDM logo bundled alongside exe
-        ('IDMLB.ico',   '.'),       # App icon bundled alongside exe
+        (os.path.join(SPECPATH, 'logo.png'), '.'),    # IDM logo bundled alongside exe
     ],
     hiddenimports=[
         'pkg_resources.py2_compat',
@@ -52,6 +51,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='IDMLB.ico',               # app icon embedded in the exe
+    icon=os.path.join(SPECPATH, 'IDMLB.ico'),   # app icon embedded in the exe
     version_file=None,
 )
