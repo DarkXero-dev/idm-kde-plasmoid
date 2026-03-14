@@ -9,6 +9,7 @@ Item {
     property var    history:  []
     property bool   loading:  false
     property color  pctColor: "#2ecc71"
+    property string label:    ""
 
     onLoadingChanged:  { gauge.requestPaint(); chart.requestPaint() }
     onPctColorChanged: { gauge.requestPaint(); chart.requestPaint() }
@@ -19,15 +20,26 @@ Item {
         anchors.margins: Kirigami.Units.smallSpacing * 2
         spacing: Kirigami.Units.smallSpacing
 
-        // ── Gauge row ─────────────────────────────────────────────────────
+        // Connection label (ADSL / LTE)
+        PC3.Label {
+            text: label
+            font.pixelSize: 11
+            font.bold: true
+            opacity: 0.5
+            Layout.alignment: Qt.AlignHCenter
+            font.letterSpacing: 2
+        }
+
+        // ── Gauge + stats centered ─────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.preferredHeight: 185
-            Layout.alignment: Qt.AlignVCenter
-            spacing: 48
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+            spacing: 0
 
-            // Gauge + stats grouped tightly together
+            Item { Layout.fillWidth: true }
+
             RowLayout {
                 spacing: 16
                 Layout.alignment: Qt.AlignVCenter
@@ -165,50 +177,7 @@ Item {
 
             } // end gauge+stats RowLayout
 
-            // "Current Provider" fills the space between gauge and logo
-            Canvas {
-                id: cpLabel
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                Component.onCompleted: requestPaint()
-                onWidthChanged:  requestPaint()
-                onHeightChanged: requestPaint()
-
-                Connections {
-                    target: orbitronFont
-                    function onStatusChanged() { cpLabel.requestPaint() }
-                }
-
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-
-                    var grad = ctx.createLinearGradient(0, 0, width, 0)
-                    grad.addColorStop(0,   "#3b82f6")
-                    grad.addColorStop(1,   "#ef4444")
-
-                    ctx.fillStyle   = grad
-                    ctx.globalAlpha = 0.30
-                    ctx.font         = "bold 36px '" + orbitronFont.name + "'"
-                    ctx.textAlign    = "left"
-                    ctx.textBaseline = "middle"
-                    ctx.fillText("CURRENT",  20, height / 2 - 22)
-                    ctx.fillText("PROVIDER", 20, height / 2 + 22)
-                }
-            }
-
-            // Logo pinned to right edge
-            Image {
-                source: Qt.resolvedUrl("../images/logo.png")
-                fillMode: Image.PreserveAspectFit
-                width:  220
-                height: 110
-                sourceSize.width:  220
-                sourceSize.height: 110
-                opacity: 0.8
-                Layout.alignment: Qt.AlignVCenter
-            }
+            Item { Layout.fillWidth: true }
         }
 
         // ── Separator ─────────────────────────────────────────────────────

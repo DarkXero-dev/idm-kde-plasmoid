@@ -426,7 +426,7 @@ class TrayIcon(QSystemTrayIcon):
         self._active = "adsl"   # which service the icon currently shows
         self._data   = {}
 
-        self.setIcon(self._make_icon(None, None))
+        self.setIcon(self._make_icon(None))
         self.setToolTip(APP_NAME)
 
         menu = QMenu()

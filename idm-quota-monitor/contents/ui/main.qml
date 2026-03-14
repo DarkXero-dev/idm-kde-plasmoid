@@ -211,44 +211,76 @@ PlasmoidItem {
         }
     }
 
-    // ── Full popup: two tabs ──────────────────────────────────────────────
+    // ── Full popup: single view, ADSL left — logo center — LTE right ─────
     fullRepresentation: Item {
         Layout.preferredWidth:  980
         Layout.minimumWidth:    980
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 28
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 22
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing
             spacing: 0
 
-            // Tab bar
-            PC3.TabBar {
-                id: tabBar
-                Layout.fillWidth: true
-                currentIndex: root.connChoice === "lte" ? 1 : 0
-
-                PC3.TabButton { text: "ADSL" }
-                PC3.TabButton { text: "LTE"  }
-            }
-
-            // Tab pages
-            StackLayout {
-                Layout.fillWidth: true
+            // Main row
+            RowLayout {
+                Layout.fillWidth:  true
                 Layout.fillHeight: true
-                currentIndex: tabBar.currentIndex
+                spacing: 0
 
+                // ADSL
                 ConnectionTab {
+                    Layout.fillWidth:  true
+                    Layout.fillHeight: true
                     data_:    root.adsl
                     history:  root.adslHistory
                     loading:  root.loading
                     pctColor: root.pctColor(root.adsl.percent)
+                    label:    "ADSL"
                 }
+
+                // Vertical separator
+                Rectangle {
+                    width: 1
+                    Layout.fillHeight: true
+                    color: Kirigami.Theme.separatorColor
+                    opacity: 0.4
+                }
+
+                // Center logo
+                Item {
+                    Layout.preferredWidth:  220
+                    Layout.fillHeight: true
+
+                    Image {
+                        anchors.centerIn: parent
+                        source: Qt.resolvedUrl("../images/logo.png")
+                        fillMode: Image.PreserveAspectFit
+                        width:  200
+                        height: 100
+                        sourceSize.width:  200
+                        sourceSize.height: 100
+                        opacity: 0.85
+                    }
+                }
+
+                // Vertical separator
+                Rectangle {
+                    width: 1
+                    Layout.fillHeight: true
+                    color: Kirigami.Theme.separatorColor
+                    opacity: 0.4
+                }
+
+                // LTE
                 ConnectionTab {
+                    Layout.fillWidth:  true
+                    Layout.fillHeight: true
                     data_:    root.lte
                     history:  root.lteHistory
                     loading:  root.loading
                     pctColor: root.pctColor(root.lte.percent)
+                    label:    "LTE"
                 }
             }
 
