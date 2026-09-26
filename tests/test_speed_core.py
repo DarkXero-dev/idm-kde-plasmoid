@@ -16,8 +16,10 @@ class SpeedHandler(BaseHTTPRequestHandler):
     rate = 2_000_000
     need_user_agent = True
 
-    def _pace(self):
-        time.sleep(CHUNK / self.rate)
+    def _pace(self, started, total):
+        delay = started + total / self.rate - time.perf_counter()
+        if delay > 0:
+            time.sleep(delay)
 
     def _ok(self):
         return not self.need_user_agent or self.headers.get("User-Agent")
@@ -40,12 +42,13 @@ class SpeedHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(size))
             self.end_headers()
             sent = 0
+            started = time.perf_counter()
             try:
                 while sent < size:
                     n = min(CHUNK, size - sent)
                     self.wfile.write(b"x" * n)
                     sent += n
-                    self._pace()
+                    self._pace(started, sent)
             except OSError:
                 pass
         else:
@@ -57,12 +60,13 @@ class SpeedHandler(BaseHTTPRequestHandler):
         size = int(self.headers["Content-Length"])
         try:
             remaining = size
+            started = time.perf_counter()
             while remaining > 0:
                 data = self.rfile.read(min(CHUNK, remaining))
                 if not data:
                     return
                 remaining -= len(data)
-                self._pace()
+                self._pace(started, size - remaining)
             body = f"size={size}\n".encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))

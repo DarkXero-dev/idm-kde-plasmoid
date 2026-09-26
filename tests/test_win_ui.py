@@ -6,7 +6,6 @@ import pytest
 pytest.importorskip("PyQt5")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QSettings
 from PyQt5.QtWidgets import QApplication, QLabel
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -35,15 +34,13 @@ SERVICES = [service("a"), service("b", "lte", 78.0), service("c", "fiber", 93.4)
 
 @pytest.fixture
 def window(app, win, monkeypatch, tmp_path):
-    QSettings.setPath(QSettings.NativeFormat, QSettings.UserScope, str(tmp_path))
+    monkeypatch.setattr(win.backend, "SETTINGS_PATH", str(tmp_path / "settings.json"))
     monkeypatch.setattr(win.backend, "fetch_all", lambda: {"error": None, "services": SERVICES})
     w = win.MainWindow()
     w._thread.wait()
     app.processEvents()
     yield w
     w._timer.stop()
-    w.prefs._s.clear()
-    w.prefs._s.sync()
 
 
 def tabs(win, w):

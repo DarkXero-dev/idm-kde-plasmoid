@@ -5,7 +5,7 @@ Supports Windows 7 SP1 to 11
 System tray icon + popup window
 """
 
-import sys, os, math, json
+import sys, os, math
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget,
@@ -18,7 +18,7 @@ from PyQt5.QtGui  import (
     QPainter, QColor, QPen, QFont, QIcon, QPixmap,
 )
 from PyQt5.QtCore import (
-    Qt, QTimer, QThread, pyqtSignal, QPointF, QRectF, QSettings,
+    Qt, QTimer, QThread, pyqtSignal, QPointF, QRectF,
     QVariantAnimation, QEasingCurve,
 )
 
@@ -55,43 +55,6 @@ RED     = "#e74c3c"
 BLUE    = "#3b82f6"
 TEXT    = "#e0e4f0"
 MUTED   = "#6b7280"
-
-
-# -- Preferences --------------------------------------------------------------
-
-class Prefs:
-    def __init__(self):
-        self._s = QSettings("IDMQuota", "Monitor")
-
-    @property
-    def selected(self):
-        try:
-            return json.loads(self._s.value("selected", "[]"))
-        except ValueError:
-            return []
-
-    @selected.setter
-    def selected(self, ids):
-        self._s.setValue("selected", json.dumps(ids))
-
-    @property
-    def names(self):
-        try:
-            return json.loads(self._s.value("names", "{}"))
-        except ValueError:
-            return {}
-
-    @names.setter
-    def names(self, names):
-        self._s.setValue("names", json.dumps(names))
-
-    @property
-    def gauge_style(self):
-        return self._s.value("gauge_style", "speedometer")
-
-    @gauge_style.setter
-    def gauge_style(self, style):
-        self._s.setValue("gauge_style", style)
 
 
 # -- Startup registry helpers -------------------------------------------------
@@ -731,7 +694,7 @@ class SpeedTestDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.prefs = Prefs()
+        self.prefs = backend.Settings()
         self.services = []
         self._error = ""
         self._loading = False

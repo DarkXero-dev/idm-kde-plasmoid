@@ -1,5 +1,6 @@
 import base64
 import ctypes
+import json
 import os
 import re
 from datetime import datetime
@@ -8,6 +9,7 @@ import idm_core
 
 CONFIG_PATH = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
                            "IDMQuota", "config.conf")
+SETTINGS_PATH = os.path.join(os.path.dirname(CONFIG_PATH), "settings.json")
 TOKEN_PREFIX = "dpapi:"
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -123,3 +125,46 @@ def shown_services(services, selected):
 
 def display_name(service, names):
     return names.get(service["id"]) or service["name"]
+
+
+class Settings:
+    """Display preferences kept in a small JSON file next to the login config."""
+
+    def _load(self):
+        try:
+            with open(SETTINGS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _set(self, key, value):
+        data = self._load()
+        data[key] = value
+        os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    @property
+    def selected(self):
+        return self._load().get("selected", [])
+
+    @selected.setter
+    def selected(self, ids):
+        self._set("selected", ids)
+
+    @property
+    def names(self):
+        return self._load().get("names", {})
+
+    @names.setter
+    def names(self, names):
+        self._set("names", names)
+
+    @property
+    def gauge_style(self):
+        return self._load().get("gauge_style", "speedometer")
+
+    @gauge_style.setter
+    def gauge_style(self, style):
+        self._set("gauge_style", style)

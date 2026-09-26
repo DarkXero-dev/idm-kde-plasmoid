@@ -103,3 +103,33 @@ def test_real_dpapi_round_trip():
     sealed = idm_win._protect(secret)
     assert sealed != secret
     assert idm_win._unprotect(sealed) == secret
+
+
+@pytest.fixture
+def settings_file(tmp_path, monkeypatch):
+    path = tmp_path / "IDMQuota" / "settings.json"
+    monkeypatch.setattr(idm_win, "SETTINGS_PATH", str(path))
+    return path
+
+
+def test_settings_defaults_when_nothing_is_saved(settings_file):
+    s = idm_win.Settings()
+    assert (s.selected, s.names, s.gauge_style) == ([], {}, "speedometer")
+
+
+def test_settings_round_trip_and_keep_other_keys(settings_file):
+    s = idm_win.Settings()
+    s.selected = ["c"]
+    s.names = {"b": "My Phone"}
+    s.gauge_style = "simple"
+    again = idm_win.Settings()
+    assert (again.selected, again.names, again.gauge_style) == (["c"], {"b": "My Phone"}, "simple")
+
+
+def test_settings_survive_a_corrupt_file(settings_file):
+    settings_file.parent.mkdir()
+    settings_file.write_text("{not json")
+    s = idm_win.Settings()
+    assert s.selected == []
+    s.gauge_style = "simple"
+    assert idm_win.Settings().gauge_style == "simple"
