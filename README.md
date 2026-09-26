@@ -1,85 +1,35 @@
 # IDM Quota Monitor
 
-KDE Plasma 6 panel widget showing IDM internet quota usage for ADSL and LTE connections.
+A KDE Plasma 6 panel widget, with a Windows tray app version, that shows the internet quota of your IDM services. It detects every ADSL/VDSL, LTE and Fiber service on your IDM login and shows the usage, remaining quota, last update and exact expiry date and time of up to three of them at once. Services can be renamed, and the usage gauge comes in two styles (Speedometer or Simple). A built-in speed test measures download and upload separately.
 
-![IDMQM](IDMQMLB.webp)
+![IDM Quota Monitor demo: gauges, settings, About and the speed test](docs/demo.gif)
 
-## Features
+## Install on Linux
 
-- Slim panel bar showing connection type, usage bar, and percentage
-- Click the **ADSL / LTE badge** to toggle which connection is shown on the panel
-- Click anywhere else to open the popup with:
-  - Arc gauge + GB remaining + last-updated time
-  - 24h usage history line chart
-- Color-coded: green < 70% → orange 70–90% → red ≥ 90%
-- Systemd user timer refreshes every 15 minutes
-
-## Requirements
-
-- KDE Plasma 6.x
-- `python-requests` (installed automatically by `install.sh`)
-- `plasma5support`
-
-## Install
+Requires KDE Plasma 6 and Python 3. The installer adds `python-requests` and `python-cryptography` (pacman, apt or dnf, with a pip fallback).
 
 ```bash
+git clone https://github.com/DarkXero-dev/idm-kde-plasmoid
+cd idm-kde-plasmoid
 chmod +x install.sh
 ./install.sh
 ```
 
 Then:
-1. Restart plasmashell: `kquitapp6 plasmashell; plasmashell &`
-2. Right-click panel → **Add Widgets** → search **IDM Quota**
-3. Right-click widget → **Configure** → enter your IDM username and password
 
-## Credentials
+1. Restart Plasma: `kquitapp6 plasmashell; plasmashell &`
+2. Right-click the panel, choose **Add Widgets** and search for **IDM Quota**.
+3. Right-click the widget, choose **Configure**, enter your IDM login and click **Detect services**.
+4. Tick up to 3 services to show, optionally rename them, and pick a gauge style.
 
-Credentials are entered via **right-click → Configure** and stored in:
+## Install on Windows
 
-```
-~/.config/IDMQuota/config.conf
-```
+Works on Windows 7 SP1 and newer. The `.exe` is built automatically by GitHub, so there is nothing to build or install.
 
-You can also edit that file directly:
+1. Download `IDMQuotaMonitor.exe` from the [latest release](https://github.com/DarkXero-dev/idm-kde-plasmoid/releases/latest).
+2. Run it from anywhere. It lives in the system tray: click the icon to switch service and right-click it for the menu.
+3. Open **Settings**, enter your IDM login, click **Detect services** and pick what to show.
 
-```
-username=your_idm_username
-password=your_idm_password
-```
+## License
 
-## File structure
-
-```
-.
-├── install.sh
-├── README.md
-└── idm-quota-monitor/
-    ├── metadata.json
-    ├── fetch_quota.py          # login + scrape both connections → JSON stdout
-    ├── idm-quota.service       # systemd oneshot unit
-    ├── idm-quota.timer         # fires every 15 minutes
-    └── contents/
-        ├── config/
-        │   ├── config.qml      # config page declaration
-        │   └── main.xml        # config schema
-        ├── images/
-        │   └── logo.png
-        └── ui/
-            ├── main.qml        # panel bar + popup
-            ├── ConnectionTab.qml  # per-connection tab (gauge + chart)
-            └── configGeneral.qml  # credentials + connection config page
-```
-
-## Manual refresh
-
-Click the widget → **Refresh**, or:
-
-```bash
-systemctl --user start idm-quota.service
-```
-
-## Logs
-
-```bash
-journalctl --user -u idm-quota.service -n 20
-```
+GPL-3.0-or-later. See [LICENSE](LICENSE).

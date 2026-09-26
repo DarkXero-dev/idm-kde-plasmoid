@@ -4,30 +4,53 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PC3
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasma5support as P5Support
+import "util.js" as Util
 
 PlasmoidItem {
     id: root
 
-    readonly property string scriptPath: Qt.resolvedUrl("../../fetch_quota.py").toString().replace("file://", "")
+    readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl("../../").toString().replace("file://", ""))
+    readonly property int maxShown: 3
 
-    // Per-connection data
-    property var adsl: ({ percent: 0, remaining: "", updated: "", days_left: null, expiry: "", expiry_time: null, error: "" })
-    property var lte:  ({ percent: 0, remaining: "", updated: "", days_left: null, expiry: "", expiry_time: null, error: "" })
-    property var adslHistory: []
-    property var lteHistory:  []
-
+    property var services: []
+    property string fetchError: ""
     property bool loading: false
 
     readonly property bool configured: Plasmoid.configuration.username !== ""
                                     && Plasmoid.configuration.password !== ""
 
-    readonly property string connChoice: Plasmoid.configuration.connectionChoice
-
-    function pctColor(pct) {
-        return pct >= 90 ? "#e74c3c" : pct >= 70 ? "#f39c12" : "#2ecc71"
+    readonly property var selectedIds: {
+        try { return JSON.parse(Plasmoid.configuration.selectedServices) } catch (e) { return [] }
     }
 
+    readonly property var names: {
+        try { return JSON.parse(Plasmoid.configuration.serviceNames) } catch (e) { return {} }
+    }
+
+    readonly property var shown: {
+        var picked = services.filter(s => selectedIds.indexOf(s.id) >= 0)
+        return (picked.length > 0 ? picked : services).slice(0, maxShown)
+    }
+
+    readonly property var active: shown.find(s => s.id === Plasmoid.configuration.activeService) || shown[0] || null
+
+    readonly property string gaugeStyle: Plasmoid.configuration.gaugeStyle
+
     preferredRepresentation: compactRepresentation
+    toolTipMainText: "IDM Quota"
+    toolTipSubText: shown.map(s => Util.typeLabel(s.type) + " " + Util.displayName(s, names) + ": "
+                                   + (s.error ? "error" : s.percent === null ? "-" : s.percent.toFixed(1) + "%")).join("\n")
+
+    SpeedTestWindow {
+        id: speedWindow
+        pluginDir: root.pluginDir
+    }
+
+    function cycleActive() {
+        if (shown.length < 2)
+            return
+        Plasmoid.configuration.activeService = shown[(shown.indexOf(active) + 1) % shown.length].id
+    }
 
     // ── Sync credentials to ~/.config/IDMQuota/config.conf ───────────────
     property bool _refreshAfterWrite: false
@@ -45,18 +68,11 @@ PlasmoidItem {
         }
     }
 
-    function toHex(str) {
-        var r = ""
-        for (var i = 0; i < str.length; i++)
-            r += str.charCodeAt(i).toString(16).padStart(2, "0")
-        return r
-    }
-
     function writeConfigFile() {
         if (!configured) return
-        var u = toHex(Plasmoid.configuration.username)
-        var p = toHex(Plasmoid.configuration.password)
-        fileWriter.connectSource("python3 " + scriptPath + " --write-config " + u + " " + p)
+        fileWriter.connectSource("python3 '" + pluginDir + "fetch_quota.py' --write-config "
+                                 + Util.toHex(Plasmoid.configuration.username) + " "
+                                 + Util.toHex(Plasmoid.configuration.password))
     }
 
     Timer {
@@ -77,7 +93,7 @@ PlasmoidItem {
 
     Component.onCompleted: writeConfigFile()
 
-    // ── Fetch both connections ────────────────────────────────────────────
+    // ── Fetch every service ───────────────────────────────────────────────
     P5Support.DataSource {
         id: runner
         engine: "executable"
@@ -87,13 +103,11 @@ PlasmoidItem {
             root.loading = false
             try {
                 var d = JSON.parse(data["stdout"])
-                if (d.adsl) root.adsl = d.adsl
-                if (d.lte)  root.lte  = d.lte
-                if (d.adsl_history) root.adslHistory = d.adsl_history
-                if (d.lte_history)  root.lteHistory  = d.lte_history
+                root.fetchError = d.error || ""
+                root.services = d.services || []
             } catch (e) {
-                root.adsl = { percent: 0, remaining: "", updated: "", error: "Parse error" }
-                root.lte  = { percent: 0, remaining: "", updated: "", error: "Parse error" }
+                root.fetchError = "Could not read the fetch result"
+                root.services = []
             }
         }
     }
@@ -101,7 +115,7 @@ PlasmoidItem {
     function runScript() {
         if (!configured) return
         loading = true
-        runner.connectSource("python3 " + scriptPath)
+        runner.connectSource("python3 '" + pluginDir + "fetch_quota.py'")
     }
 
     Timer {
@@ -112,7 +126,7 @@ PlasmoidItem {
         onTriggered: root.runScript()
     }
 
-    // ── Compact: panel bar with clickable connection toggle ───────────────
+    // ── Compact: panel bar, badge cycles through the shown services ───────
     compactRepresentation: MouseArea {
         id: compactArea
         implicitWidth: panelLayout.implicitWidth + Kirigami.Units.largeSpacing * 2
@@ -125,10 +139,11 @@ PlasmoidItem {
             anchors.centerIn: parent
             spacing: 4
 
-            // activeData lives on the RowLayout so all children can use parent.activeData
-            readonly property var activeData: root.connChoice === "lte" ? root.lte : root.adsl
+            readonly property var  svc:    root.active
+            readonly property bool failed: root.configured && !root.loading
+                                           && (root.fetchError !== "" || (svc !== null && svc.error))
+            readonly property bool hasPct: svc !== null && svc.percent !== null && svc.percent !== undefined
 
-            // ── Connection toggle badge ───────────────────────────────────
             Item {
                 id: connToggle
                 implicitWidth: connLabel.implicitWidth + Kirigami.Units.smallSpacing * 2
@@ -147,25 +162,21 @@ PlasmoidItem {
                 PC3.Label {
                     id: connLabel
                     anchors.centerIn: parent
-                    text: root.connChoice === "lte" ? "LTE" : "ADSL"
+                    text: panelLayout.svc ? Util.typeLabel(panelLayout.svc.type) : "IDM"
                     font.pixelSize: 9
                     font.bold: true
                 }
 
-                // Intercepts clicks here — stops propagation to outer MouseArea
+                // Intercepts clicks here so the outer MouseArea does not toggle the popup
                 MouseArea {
                     id: toggleArea
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        Plasmoid.configuration.connectionChoice =
-                            (root.connChoice === "lte" ? "adsl" : "lte")
-                    }
+                    onClicked: root.cycleActive()
                 }
             }
 
-            // ── Progress bar ──────────────────────────────────────────────
             Item {
                 width: 55
                 height: 5
@@ -178,176 +189,53 @@ PlasmoidItem {
                                    Kirigami.Theme.textColor.b, 0.15)
                 }
                 Rectangle {
-                    width: !root.configured || panelLayout.activeData.error
+                    width: !root.configured || panelLayout.failed || !panelLayout.hasPct
                            ? 0
-                           : parent.width * Math.min(panelLayout.activeData.percent / 100, 1)
+                           : parent.width * Math.min(panelLayout.svc.percent / 100, 1)
                     height: parent.height
                     radius: 2
                     color: root.loading
                            ? Kirigami.Theme.disabledTextColor
-                           : root.pctColor(panelLayout.activeData.percent)
+                           : Util.pctColor(panelLayout.hasPct ? panelLayout.svc.percent : 0)
                     Behavior on width { NumberAnimation { duration: 500 } }
                     Behavior on color { ColorAnimation  { duration: 400 } }
                 }
             }
 
-            // ── Percentage label ──────────────────────────────────────────
             PC3.Label {
-                text: !root.configured                    ? "setup"
-                    : root.loading                        ? "…"
-                    : panelLayout.activeData.error        ? "err"
-                    : panelLayout.activeData.percent.toFixed(1) + "%"
+                text: !root.configured    ? "setup"
+                    : root.loading        ? "…"
+                    : panelLayout.failed  ? "err"
+                    : !panelLayout.hasPct ? "-"
+                    : panelLayout.svc.percent.toFixed(1) + "%"
                 font.pixelSize: 10
                 font.bold: true
-                color: !root.configured || panelLayout.activeData.error
+                color: !root.configured || panelLayout.failed || !panelLayout.hasPct
                        ? Kirigami.Theme.disabledTextColor
                        : root.loading
                          ? Kirigami.Theme.textColor
-                         : root.pctColor(panelLayout.activeData.percent)
+                         : Util.pctColor(panelLayout.svc.percent)
             }
 
-            // Trailing gap so widget doesn't crowd its neighbour
             Item { width: Kirigami.Units.smallSpacing }
         }
     }
 
-    // ── Full popup: single view, ADSL left — logo center — LTE right ─────
-    fullRepresentation: Item {
-        Layout.preferredWidth:  958
-        Layout.preferredHeight: 327
+    // ── Full popup ────────────────────────────────────────────────────────
+    fullRepresentation: Popup {
+        shown:      root.shown
+        names:      root.names
+        gaugeStyle: root.gaugeStyle
+        loading:    root.loading
+        configured: root.configured
+        fetchError: root.fetchError
+        active:     root.expanded
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
-            spacing: 0
-
-            // Main row
-            RowLayout {
-                Layout.fillWidth:  true
-                Layout.fillHeight: true
-                spacing: 0
-
-                ConnectionTab {
-                    Layout.fillWidth:  true
-                    Layout.fillHeight: true
-                    data_:    root.adsl
-                    loading:  root.loading
-                    pctColor: root.pctColor(root.adsl.percent)
-                    label:    "ADSL"
-                }
-
-                Image {
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.leftMargin: -25
-                    source: Qt.resolvedUrl("../images/logo.png")
-                    fillMode: Image.PreserveAspectFit
-                    width:  230
-                    height: 115
-                    sourceSize.width:  230
-                    sourceSize.height: 115
-                    opacity: 0.85
-                }
-
-                ConnectionTab {
-                    Layout.fillWidth:  true
-                    Layout.fillHeight: true
-                    data_:    root.lte
-                    loading:  root.loading
-                    pctColor: root.pctColor(root.lte.percent)
-                    label:    "LTE"
-                }
-            }
-
-            // ── Footer ────────────────────────────────────────────────────
-            Canvas {
-                id: eolBar
-                Layout.fillWidth: true
-                height: 38
-
-                property real tick: 0
-
-                Timer {
-                    interval: 32; running: true; repeat: true
-                    onTriggered: { eolBar.tick += 0.016; eolBar.requestPaint() }
-                }
-
-                function hsl(h, s, l, a) {
-                    h = ((h % 360) + 360) % 360 / 360
-                    var q = l < 0.5 ? l*(1+s) : l+s-l*s
-                    var p = 2*l - q
-                    function c(t) {
-                        if (t<0) t+=1; if (t>1) t-=1
-                        if (t<1/6) return p+(q-p)*6*t
-                        if (t<1/2) return q
-                        if (t<2/3) return p+(q-p)*(2/3-t)*6
-                        return p
-                    }
-                    return Qt.rgba(c(h+1/3), c(h), c(h-1/3), a)
-                }
-
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-
-                    var cx      = width / 2
-                    var cy      = height / 2
-                    var hueBase = (tick * 40) % 360
-                    var pulse   = 0.5 + 0.5 * Math.sin(tick * 1.8)
-                    var text    = "~~~~~~~~~~~~  End Of Line  ~~~~~~~~~~~~"
-
-                    ctx.font         = "bold 19px sans-serif"
-                    ctx.textAlign    = "center"
-                    ctx.textBaseline = "middle"
-
-                    // Glow passes
-                    for (var g = 3; g >= 1; g--) {
-                        ctx.shadowColor = hsl(hueBase + 180, 1.0, 0.65, 0.6 * pulse)
-                        ctx.shadowBlur  = g * 11
-                        var grad = ctx.createLinearGradient(0, 0, width, 0)
-                        grad.addColorStop(0.00, hsl(hueBase +   0, 0.95, 0.65, 0.15))
-                        grad.addColorStop(0.25, hsl(hueBase +  90, 0.95, 0.65, 0.15))
-                        grad.addColorStop(0.50, hsl(hueBase + 180, 0.95, 0.65, 0.15))
-                        grad.addColorStop(0.75, hsl(hueBase + 270, 0.95, 0.65, 0.15))
-                        grad.addColorStop(1.00, hsl(hueBase + 360, 0.95, 0.65, 0.15))
-                        ctx.fillStyle = grad
-                        ctx.fillText(text, cx, cy)
-                    }
-
-                    // Main text with RGB gradient
-                    ctx.shadowBlur  = 14 * pulse
-                    ctx.shadowColor = hsl(hueBase + 180, 1.0, 0.65, 0.7 * pulse)
-                    var mainGrad = ctx.createLinearGradient(0, 0, width, 0)
-                    mainGrad.addColorStop(0.00, hsl(hueBase +   0, 0.95, 0.70, 0.85))
-                    mainGrad.addColorStop(0.25, hsl(hueBase +  90, 0.95, 0.70, 0.85))
-                    mainGrad.addColorStop(0.50, hsl(hueBase + 180, 0.95, 0.70, 0.85))
-                    mainGrad.addColorStop(0.75, hsl(hueBase + 270, 0.95, 0.70, 0.85))
-                    mainGrad.addColorStop(1.00, hsl(hueBase + 360, 0.95, 0.70, 0.85))
-                    ctx.fillStyle = mainGrad
-                    ctx.fillText(text, cx, cy)
-                    ctx.shadowBlur  = 0
-                    ctx.shadowColor = "transparent"
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.margins: Kirigami.Units.smallSpacing
-
-                PC3.Button {
-                    text: "Settings"
-                    icon.name: "configure"
-                    onClicked: Plasmoid.internalAction("configure").trigger()
-                }
-
-                Item { Layout.fillWidth: true }
-
-                PC3.Button {
-                    text: root.loading ? "Loading…" : "Refresh"
-                    icon.name: "view-refresh"
-                    enabled: !root.loading && root.configured
-                    onClicked: root.runScript()
-                }
-            }
+        onSettingsRequested: Plasmoid.internalAction("configure").trigger()
+        onSpeedTestRequested: {
+            speedWindow.open()
+            root.expanded = false
         }
+        onRefreshRequested: root.runScript()
     }
 }

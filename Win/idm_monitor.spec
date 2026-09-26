@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec — produces a single portable .exe
+# PyInstaller spec: produces a single portable .exe
 # Build: pyinstaller idm_monitor.spec
 
 import os
@@ -7,7 +7,7 @@ block_cipher = None
 
 a = Analysis(
     ['main.py'],
-    pathex=['.'],
+    pathex=['.', os.path.join(SPECPATH, '..', 'idm-quota-monitor')],
     binaries=[],
     datas=[
         (os.path.join(SPECPATH, 'logo.png'), '.'),    # IDM logo bundled alongside exe

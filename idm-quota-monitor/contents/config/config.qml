@@ -3,9 +3,8 @@ import org.kde.plasma.configuration
 
 ConfigModel {
     ConfigCategory {
-        name: "Account"
-        icon: "preferences-system-login"
+        name: "General"
+        icon: "configure"
         source: "configGeneral.qml"
     }
-
 }

@@ -2,9 +2,9 @@
     "KPlugin": {
         "Name": "IDM Quota Monitor",
         "Description": "Shows IDM internet quota usage",
-        "Icon": "network-connect",
+        "Icon": "/images/Xero.png",
         "Id": "com.github.idm-quota-monitor",
-        "Version": "1.0",
+        "Version": "2.0",
         "Authors": [
             {"Name": "DarkXero / TechXero", "Email": "info@techxero.com"}
         ],
